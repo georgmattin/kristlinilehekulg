@@ -9,7 +9,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Eye, Edit, Trash2, LogOut, Save, Plus, Users, Mail } from "lucide-react"
+import { Eye, Edit, Trash2, LogOut, Save, Plus, Users, Mail, Upload, ImageIcon, FileText } from "lucide-react"
 import Image from "next/image"
 import { supabase, type Product, type NewsletterSubscriber } from "@/lib/supabase"
 import { signIn } from "@/lib/auth"
@@ -42,6 +42,12 @@ export default function AdminPage() {
 
   const [newsletterEmail, setNewsletterEmail] = useState("")
   const [newsletterLoading, setNewsletterLoading] = useState(false)
+  const [imageFile, setImageFile] = useState<File | null>(null)
+  const [imageUploading, setImageUploading] = useState(false)
+  const [downloadFile, setDownloadFile] = useState<File | null>(null)
+  const [downloadUploading, setDownloadUploading] = useState(false)
+  const [imageDragActive, setImageDragActive] = useState(false)
+  const [fileDragActive, setFileDragActive] = useState(false)
 
   useEffect(() => {
     // Check if already authenticated (simple session check)
@@ -154,13 +160,200 @@ export default function AdminPage() {
     localStorage.removeItem("admin_authenticated")
   }
 
+  const handleImageUpload = async (file: File) => {
+    setImageUploading(true)
+    try {
+      const fileExt = file.name.split('.').pop()
+      const fileName = `product-${Date.now()}.${fileExt}`
+      
+      const { data, error } = await supabase.storage
+        .from('product-images')
+        .upload(fileName, file)
+
+      if (error) {
+        // If bucket doesn't exist, try to create it or just use URL input
+        console.error('Upload error:', error)
+        alert('Image upload failed. Please use a direct image URL instead.')
+        return null
+      }
+
+      // Get public URL
+      const { data: urlData } = supabase.storage
+        .from('product-images')
+        .getPublicUrl(fileName)
+
+      return urlData.publicUrl
+    } catch (error) {
+      console.error('Error uploading image:', error)
+      alert('Image upload failed. Please use a direct image URL instead.')
+      return null
+    } finally {
+      setImageUploading(false)
+    }
+  }
+
+  const uploadImageToStorage = async (file: File): Promise<string | null> => {
+    try {
+      const fileExt = file.name.split('.').pop()
+      const fileName = `product-${Date.now()}.${fileExt}`
+      
+      const { data, error } = await supabase.storage
+        .from('product-images')
+        .upload(fileName, file)
+
+      if (error) {
+        console.error('Upload error:', error)
+        // If bucket doesn't exist, we'll create a fallback
+        throw error
+      }
+
+      // Get public URL
+      const { data: urlData } = supabase.storage
+        .from('product-images')
+        .getPublicUrl(fileName)
+
+      return urlData.publicUrl
+    } catch (error) {
+      console.error('Error uploading image:', error)
+      return null
+    }
+  }
+
+  const uploadFileToStorage = async (file: File): Promise<string | null> => {
+    try {
+      const fileExt = file.name.split('.').pop()
+      const fileName = `download-${Date.now()}.${fileExt}`
+      
+      const { data, error } = await supabase.storage
+        .from('product-files')
+        .upload(fileName, file)
+
+      if (error) {
+        console.error('Upload error:', error)
+        throw error
+      }
+
+      // Get public URL
+      const { data: urlData } = supabase.storage
+        .from('product-files')
+        .getPublicUrl(fileName)
+
+      return urlData.publicUrl
+    } catch (error) {
+      console.error('Error uploading file:', error)
+      return null
+    }
+  }
+
+  const handleImageDrop = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault()
+    setImageDragActive(false)
+    
+    const files = e.dataTransfer.files
+    if (files.length > 0) {
+      const file = files[0]
+      
+      // Check file type
+      const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp']
+      if (!allowedTypes.includes(file.type)) {
+        alert('Toetatud on ainult JPG, PNG ja WEBP pildid!')
+        return
+      }
+      
+      // Check file size (5MB limit)
+      if (file.size > 5 * 1024 * 1024) {
+        alert('Pilt on liiga suur! Maksimaalne lubatud suurus on 5MB.')
+        return
+      }
+      
+      setImageFile(file)
+      setNewProduct({ ...newProduct, image_url: "" })
+    }
+  }
+
+  const handleFileDrop = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault()
+    setFileDragActive(false)
+    
+    const files = e.dataTransfer.files
+    if (files.length > 0) {
+      const file = files[0]
+      
+      // Check file size (50MB limit)
+      if (file.size > 50 * 1024 * 1024) {
+        alert('Fail on liiga suur! Maksimaalne lubatud suurus on 50MB.')
+        return
+      }
+      
+      setDownloadFile(file)
+      setNewProduct({ ...newProduct, download_file_url: "" })
+    }
+  }
+
+  const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault()
+  }
+
+  const handleDragEnter = (e: React.DragEvent<HTMLDivElement>, type: 'image' | 'file') => {
+    e.preventDefault()
+    if (type === 'image') {
+      setImageDragActive(true)
+    } else {
+      setFileDragActive(true)
+    }
+  }
+
+  const handleDragLeave = (e: React.DragEvent<HTMLDivElement>, type: 'image' | 'file') => {
+    e.preventDefault()
+    if (type === 'image') {
+      setImageDragActive(false)
+    } else {
+      setFileDragActive(false)
+    }
+  }
+
   const handleProductSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
 
     try {
+      let imageUrl = newProduct.image_url
+      let downloadFileUrl = newProduct.download_file_url
+
+      // If user selected an image file, upload it first
+      if (imageFile) {
+        setImageUploading(true)
+        const uploadedUrl = await uploadImageToStorage(imageFile)
+        if (uploadedUrl) {
+          imageUrl = uploadedUrl
+        } else {
+          alert('Pildi üleslaadimine ebaõnnestus. Palun proovige uuesti.')
+          setImageUploading(false)
+          setLoading(false)
+          return
+        }
+        setImageUploading(false)
+      }
+
+      // If user selected a download file, upload it
+      if (downloadFile) {
+        setDownloadUploading(true)
+        const uploadedUrl = await uploadFileToStorage(downloadFile)
+        if (uploadedUrl) {
+          downloadFileUrl = uploadedUrl
+        } else {
+          alert('Faili üleslaadimine ebaõnnestus. Palun proovige uuesti.')
+          setDownloadUploading(false)
+          setLoading(false)
+          return
+        }
+        setDownloadUploading(false)
+      }
+
       const productData = {
         ...newProduct,
+        image_url: imageUrl,
+        download_file_url: downloadFileUrl,
         price: newProduct.is_free ? 0 : Number.parseFloat(newProduct.price),
         original_price: newProduct.original_price ? Number.parseFloat(newProduct.original_price) : null,
       }
@@ -186,6 +379,12 @@ export default function AdminPage() {
         is_free: false,
         download_file_url: "",
       })
+      setImageFile(null)
+      setImageUploading(false)
+      setDownloadFile(null)
+      setDownloadUploading(false)
+      setImageDragActive(false)
+      setFileDragActive(false)
       setShowAddForm(false)
       setEditingProduct(null)
       fetchData()
@@ -571,12 +770,59 @@ export default function AdminPage() {
 
                         <div className="space-y-2">
                           <Label htmlFor="stripe_price_id">Stripe Price ID</Label>
-                          <Input
-                            id="stripe_price_id"
-                            value={newProduct.stripe_price_id}
-                            onChange={(e) => setNewProduct({ ...newProduct, stripe_price_id: e.target.value })}
-                            placeholder="price_1234567890"
-                          />
+                          <div className="flex gap-2">
+                            <Input
+                              id="stripe_price_id"
+                              value={newProduct.stripe_price_id}
+                              onChange={(e) => setNewProduct({ ...newProduct, stripe_price_id: e.target.value })}
+                              placeholder="price_1234567890"
+                              className="flex-1"
+                            />
+                            {!newProduct.is_free && newProduct.title && newProduct.price && editingProduct && (
+                              <Button
+                                type="button"
+                                variant="outline"
+                                onClick={async () => {
+                                  try {
+                                    setLoading(true)
+                                    const response = await fetch('/api/stripe/create-price', {
+                                      method: 'POST',
+                                      headers: { 'Content-Type': 'application/json' },
+                                      body: JSON.stringify({
+                                        productId: editingProduct.id,
+                                        productTitle: newProduct.title,
+                                        productDescription: newProduct.description,
+                                        price: newProduct.price
+                                      })
+                                    })
+                                    
+                                    const result = await response.json()
+                                    if (result.success) {
+                                      setNewProduct({ ...newProduct, stripe_price_id: result.priceId })
+                                      alert(`Stripe Price ID created: ${result.priceId}`)
+                                    } else {
+                                      alert(`Error: ${result.error}`)
+                                    }
+                                  } catch (error) {
+                                    alert('Failed to create Stripe Price ID')
+                                  } finally {
+                                    setLoading(false)
+                                  }
+                                }}
+                                disabled={loading}
+                              >
+                                {loading ? "Creating..." : "Generate"}
+                              </Button>
+                            )}
+                            {!newProduct.is_free && newProduct.title && newProduct.price && !editingProduct && (
+                              <div className="text-xs text-orange-600 bg-orange-50 p-2 rounded">
+                                Save the product first, then edit it to generate Stripe Price ID
+                              </div>
+                            )}
+                          </div>
+                          <p className="text-xs text-gray-500">
+                            Leave empty to use dynamic pricing. Generate to create a Stripe Price ID for better performance.
+                          </p>
                         </div>
                       </div>
                     )}
@@ -598,28 +844,127 @@ export default function AdminPage() {
                     )}
 
                     <div className="space-y-2">
-                      <Label htmlFor="image_url">Product Image URL</Label>
-                      <Input
-                        id="image_url"
-                        placeholder="https://example.com/image.jpg"
-                        value={newProduct.image_url}
-                        onChange={(e) => setNewProduct({ ...newProduct, image_url: e.target.value })}
-                      />
+                      <Label>Lisa toote pilt</Label>
+                      <div
+                        className={`border-2 border-dashed rounded-lg p-6 text-center transition-colors cursor-pointer ${
+                          imageDragActive 
+                            ? 'border-pink-500 bg-pink-50' 
+                            : imageFile 
+                            ? 'border-green-500 bg-green-50' 
+                            : 'border-gray-300 hover:border-pink-400 hover:bg-pink-50'
+                        } ${(imageUploading || loading) ? 'opacity-50 cursor-not-allowed' : ''}`}
+                        onDrop={handleImageDrop}
+                        onDragOver={handleDragOver}
+                        onDragEnter={(e) => handleDragEnter(e, 'image')}
+                        onDragLeave={(e) => handleDragLeave(e, 'image')}
+                        onClick={() => {
+                          if (imageUploading || loading) return
+                          const input = document.createElement('input')
+                          input.type = 'file'
+                          input.accept = 'image/*'
+                          input.onchange = (e) => {
+                            const file = (e.target as HTMLInputElement).files?.[0]
+                            if (file) {
+                              // Check file size (5MB limit)
+                              if (file.size > 5 * 1024 * 1024) {
+                                alert('Pilt on liiga suur! Maksimaalne lubatud suurus on 5MB.')
+                                return
+                              }
+                              
+                              // Check file type
+                              const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp']
+                              if (!allowedTypes.includes(file.type)) {
+                                alert('Toetatud on ainult JPG, PNG ja WEBP pildid!')
+                                return
+                              }
+                              
+                              setImageFile(file)
+                              setNewProduct({ ...newProduct, image_url: '' })
+                            }
+                          }
+                          input.click()
+                        }}
+                      >
+                        {imageUploading ? (
+                          <div className="flex flex-col items-center">
+                            <div className="w-8 h-8 border-2 border-pink-600 border-t-transparent rounded-full animate-spin mb-2"></div>
+                            <p className="text-pink-600 font-medium">Pilti laaditakse üles...</p>
+                          </div>
+                        ) : imageFile ? (
+                          <div className="flex flex-col items-center">
+                            <ImageIcon className="w-12 h-12 text-green-600 mb-2" />
+                            <p className="text-green-600 font-medium">✓ Pilt valitud</p>
+                            <p className="text-sm text-gray-600">{imageFile.name}</p>
+                            <p className="text-xs text-gray-500 mt-2">Kliki uue pildi valimiseks</p>
+                          </div>
+                        ) : (
+                          <div className="flex flex-col items-center">
+                            <ImageIcon className="w-12 h-12 text-gray-400 mb-2" />
+                            <p className="text-gray-600 font-medium">Lisa toote pilt</p>
+                            <p className="text-sm text-gray-500">Lohista pilt siia või kliki valimiseks</p>
+                            <p className="text-xs text-gray-400 mt-2">JPG, PNG, WEBP - max 5MB</p>
+                          </div>
+                        )}
+                      </div>
                     </div>
 
-                    {newProduct.is_free && (
-                      <div className="space-y-2">
-                        <Label htmlFor="download_file_url">Download File URL</Label>
-                        <Input
-                          id="download_file_url"
-                          placeholder="https://example.com/file.pdf"
-                          value={newProduct.download_file_url}
-                          onChange={(e) => setNewProduct({ ...newProduct, download_file_url: e.target.value })}
-                          required={newProduct.is_free && !newProduct.download_file_url}
-                        />
-                        <p className="text-xs text-gray-500">Direct link to your file (PDF, ZIP, DOC, etc.)</p>
+                    <div className="space-y-2">
+                      <Label>Lisa toote fail</Label>
+                        <div
+                          className={`border-2 border-dashed rounded-lg p-6 text-center transition-colors cursor-pointer ${
+                            fileDragActive 
+                              ? 'border-blue-500 bg-blue-50' 
+                              : downloadFile 
+                              ? 'border-green-500 bg-green-50' 
+                              : 'border-gray-300 hover:border-blue-400 hover:bg-blue-50'
+                          } ${(downloadUploading || loading) ? 'opacity-50 cursor-not-allowed' : ''}`}
+                          onDrop={handleFileDrop}
+                          onDragOver={handleDragOver}
+                          onDragEnter={(e) => handleDragEnter(e, 'file')}
+                          onDragLeave={(e) => handleDragLeave(e, 'file')}
+                          onClick={() => {
+                            if (downloadUploading || loading) return
+                            const input = document.createElement('input')
+                            input.type = 'file'
+                            input.accept = '.pdf,.zip,.doc,.docx,.txt,.rar,.7z'
+                            input.onchange = (e) => {
+                              const file = (e.target as HTMLInputElement).files?.[0]
+                              if (file) {
+                                // Check file size (50MB limit)
+                                if (file.size > 50 * 1024 * 1024) {
+                                  alert('Fail on liiga suur! Maksimaalne lubatud suurus on 50MB.')
+                                  return
+                                }
+                                
+                                setDownloadFile(file)
+                                setNewProduct({ ...newProduct, download_file_url: '' })
+                              }
+                            }
+                            input.click()
+                          }}
+                        >
+                          {downloadUploading ? (
+                            <div className="flex flex-col items-center">
+                              <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin mb-2"></div>
+                              <p className="text-blue-600 font-medium">Faili laaditakse üles...</p>
+                            </div>
+                          ) : downloadFile ? (
+                            <div className="flex flex-col items-center">
+                              <FileText className="w-12 h-12 text-green-600 mb-2" />
+                              <p className="text-green-600 font-medium">✓ Fail valitud</p>
+                              <p className="text-sm text-gray-600">{downloadFile.name}</p>
+                              <p className="text-xs text-gray-500 mt-2">Kliki uue faili valimiseks</p>
+                            </div>
+                          ) : (
+                            <div className="flex flex-col items-center">
+                              <FileText className="w-12 h-12 text-gray-400 mb-2" />
+                              <p className="text-gray-600 font-medium">Lisa toote fail</p>
+                              <p className="text-sm text-gray-500">Lohista fail siia või kliki valimiseks</p>
+                              <p className="text-xs text-gray-400 mt-2">PDF, ZIP, DOC, TXT jne - max 50MB</p>
+                            </div>
+                          )}
+                        </div>
                       </div>
-                    )}
 
                     <div className="flex items-center space-x-2">
                       <input
@@ -647,6 +992,12 @@ export default function AdminPage() {
                         onClick={() => {
                           setShowAddForm(false)
                           setEditingProduct(null)
+                          setImageFile(null)
+                          setImageUploading(false)
+                          setDownloadFile(null)
+                          setDownloadUploading(false)
+                          setImageDragActive(false)
+                          setFileDragActive(false)
                         }}
                       >
                         Cancel

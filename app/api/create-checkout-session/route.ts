@@ -94,22 +94,9 @@ export async function POST(request: NextRequest) {
 
     // Create checkout session
     console.log("Creating Stripe checkout session...")
-    const sessionData = {
+    
+    let sessionData: any = {
       payment_method_types: ["card"],
-      line_items: [
-        {
-          price_data: {
-            currency: "usd",
-            product_data: {
-              name: product.title,
-              description: product.description,
-              images: product.image_url ? [product.image_url] : [],
-            },
-            unit_amount: Math.round(product.price * 100), // Convert to cents
-          },
-          quantity: 1,
-        },
-      ],
       mode: "payment",
       success_url: `${request.nextUrl.origin}/success?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${request.nextUrl.origin}/checkout?product=${productId}`,
@@ -121,6 +108,51 @@ export async function POST(request: NextRequest) {
       },
       allow_promotion_codes: true,
       billing_address_collection: "auto",
+    }
+
+    // Use Stripe Price ID if available (preferred method)
+    if (product.stripe_price_id) {
+      console.log("Using Stripe Price ID:", product.stripe_price_id)
+      sessionData.line_items = [
+        {
+          price: product.stripe_price_id,
+          quantity: 1,
+        },
+      ]
+    } else {
+      // Fallback to dynamic pricing
+      console.log("Using dynamic pricing (no Price ID found)")
+      
+      // Fix image URL - Stripe requires full URLs
+      const imageUrl = product.image_url
+      let validImageUrls = []
+      if (imageUrl) {
+        if (imageUrl.startsWith('http://') || imageUrl.startsWith('https://')) {
+          validImageUrls = [imageUrl]
+        } else if (imageUrl.startsWith('/')) {
+          // Convert relative URL to absolute URL
+          validImageUrls = [`${request.nextUrl.origin}${imageUrl}`]
+        }
+        // Skip placeholder URLs as they cause Stripe errors
+        if (imageUrl.includes('placeholder')) {
+          validImageUrls = []
+        }
+      }
+      
+      sessionData.line_items = [
+        {
+          price_data: {
+            currency: "usd",
+            product_data: {
+              name: product.title,
+              description: product.description,
+              images: validImageUrls,
+            },
+            unit_amount: Math.round(product.price * 100), // Convert to cents
+          },
+          quantity: 1,
+        },
+      ]
     }
 
     console.log("Session data:", JSON.stringify(sessionData, null, 2))

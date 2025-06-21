@@ -1,9 +1,9 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { supabase } from "@/lib/supabase"
 
-export async function GET(request: NextRequest, { params }: { params: { sessionId: string } }) {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ sessionId: string }> }) {
   try {
-    const { sessionId } = params
+    const { sessionId } = await params
 
     // Find purchase by session ID
     const { data: purchase, error } = await supabase

@@ -2,12 +2,13 @@ import { type NextRequest, NextResponse } from "next/server"
 import { stripe } from "@/lib/stripe"
 import { supabase } from "@/lib/supabase"
 import { headers } from "next/headers"
+import { sendPurchaseEmail } from "@/lib/email"
 
 const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET!
 
 export async function POST(request: NextRequest) {
   const body = await request.text()
-  const headersList = headers()
+  const headersList = await headers()
   const signature = headersList.get("stripe-signature")!
 
   let event: any
@@ -167,44 +168,4 @@ async function handleChargeDispute(dispute: any) {
   }
 }
 
-async function sendPurchaseEmail({
-  customerEmail,
-  productTitle,
-  product,
-  sessionId,
-}: {
-  customerEmail: string
-  productTitle: string
-  product: any
-  sessionId: string
-}) {
-  console.log(`📧 Sending purchase email to ${customerEmail} for ${productTitle}`)
-
-  const downloadUrl = `${process.env.NEXT_PUBLIC_SITE_URL}/download/${sessionId}`
-
-  // TODO: Implement actual email sending with your preferred service
-  // Example with Resend:
-  /*
-  import { Resend } from 'resend'
-  const resend = new Resend(process.env.RESEND_API_KEY)
-  
-  await resend.emails.send({
-    from: 'noreply@yourdomain.com',
-    to: customerEmail,
-    subject: `Your purchase: ${productTitle}`,
-    html: `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        <h1 style="color: #e91e63;">Thank you for your purchase! 🎉</h1>
-        <p>You have successfully purchased: <strong>${productTitle}</strong></p>
-        <div style="background: #f8f9fa; padding: 20px; border-radius: 8px; margin: 20px 0;">
-          <h3>Download your product:</h3>
-          <a href="${downloadUrl}" style="background: #e91e63; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block;">Download Now</a>
-        </div>
-        <p><small>This download link will expire in 30 days. You can download the product up to 5 times.</small></p>
-        <hr>
-        <p><small>If you have any questions, please contact our support team.</small></p>
-      </div>
-    `
-  })
-  */
-}
+// Email sending is now handled by the imported function from lib/email.ts

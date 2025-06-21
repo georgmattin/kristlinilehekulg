@@ -15,9 +15,9 @@ import { CheckoutButton } from "@/components/checkout-button"
 
 // Default social media links
 const DEFAULT_SOCIAL_LINKS = {
-  instagram: "https://instagram.com",
-  youtube: "https://youtube.com",
-  tiktok: "https://tiktok.com",
+  instagram: "https://instagram.com/fyzendigital",
+  youtube: "https://youtube.com/@Fyzen-u2p",
+  tiktok: "https://tiktok.com/@fyzendigital",
 }
 
 // TikTok icon component
@@ -50,20 +50,8 @@ export default function HomePage() {
         // Fetch site content
         const { data: contentData, error: contentError } = await supabase.from("site_content").select("*")
 
-        // Fetch social media links with better error handling
-        let socialData = null
-        try {
-          const { data, error } = await supabase.from("social_media_links").select("*")
-          if (error) {
-            console.log("Social media links table not found, using defaults:", error.message)
-            socialData = Object.entries(DEFAULT_SOCIAL_LINKS).map(([platform, url]) => ({ platform, url }))
-          } else {
-            socialData = data
-          }
-        } catch (err) {
-          console.log("Social media links table not accessible, using defaults")
-          socialData = Object.entries(DEFAULT_SOCIAL_LINKS).map(([platform, url]) => ({ platform, url }))
-        }
+        // Use default social media links directly
+        const socialData = Object.entries(DEFAULT_SOCIAL_LINKS).map(([platform, url]) => ({ platform, url }))
 
         if (productsError) console.error("Products error:", productsError)
         if (contentError) console.error("Content error:", contentError)
@@ -155,6 +143,9 @@ export default function HomePage() {
               <Link href="#about" className="text-gray-600 hover:text-pink-600 transition-colors">
                 About
               </Link>
+              <Link href="#newsletter" className="text-gray-600 hover:text-pink-600 transition-colors">
+                Newsletter
+              </Link>
             </nav>
             <div className="flex items-center space-x-3">
               {socialLinks.instagram && (
@@ -212,9 +203,12 @@ export default function HomePage() {
                 size="lg"
                 variant="outline"
                 className="border-pink-300 text-pink-600 hover:bg-pink-50 px-6 lg:px-8 py-3 bg-white/80 backdrop-blur-sm shadow-lg"
+                asChild
               >
-                <Play className="w-4 h-4 mr-2" />
-                {heroContent.cta_secondary || "Watch Video"}
+                <Link href="#newsletter">
+                  <Play className="w-4 h-4 mr-2" />
+                  Join My Newsletter
+                </Link>
               </Button>
             </div>
           </div>
@@ -380,7 +374,7 @@ export default function HomePage() {
       </section>
 
       {/* Newsletter */}
-      <section className="py-12 lg:py-16 px-4">
+      <section id="newsletter" className="py-12 lg:py-16 px-4">
         <div className="container mx-auto">
           <div className="max-w2xl mx-auto text-center bg-gradient-to-r from-pink-500 to-purple-600 rounded-2xl p-6 lg:p-8 text-white">
             <h2 className="text-2xl lg:text-3xl font-bold mb-4">
