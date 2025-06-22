@@ -7,9 +7,15 @@ import { sendPurchaseEmail } from "@/lib/email"
 const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET!
 
 export async function POST(request: NextRequest) {
+  console.log("🔥 WEBHOOK CALLED - Request received!")
+  console.log("🔍 Webhook secret exists:", !!webhookSecret)
+  
   const body = await request.text()
+  console.log("📦 Body length:", body.length)
+  
   const headersList = await headers()
-  const signature = headersList.get("stripe-signature")!
+  const signature = headersList.get("stripe-signature")
+  console.log("✍️ Signature exists:", !!signature)
 
   let event: any
 

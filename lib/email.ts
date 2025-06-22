@@ -2,12 +2,12 @@ import nodemailer from 'nodemailer'
 
 // SMTP configuration for veebimajutus.ee
 const transporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST || 'mail.veebimajutus.ee',
+  host: process.env.SMTP_HOST,
   port: parseInt(process.env.SMTP_PORT || '465'),
   secure: true, // true for 465, false for other ports
   auth: {
-    user: process.env.SMTP_USER || 'no-reply@theolivegroceoffice.eu',
-    pass: process.env.SMTP_PASS || 'Minemunni1.'
+    user: process.env.SMTP_USER,
+    pass: process.env.SMTP_PASS
   },
   tls: {
     // Do not fail on invalid certs for self-signed certificates
@@ -25,7 +25,7 @@ export interface EmailOptions {
 export async function sendEmail({ to, subject, html, from }: EmailOptions) {
   try {
     const mailOptions = {
-      from: from || 'no-reply@theolivegroceoffice.eu',
+      from: from || process.env.SMTP_USER,
       to,
       subject,
       html
